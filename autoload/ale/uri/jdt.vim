@@ -37,25 +37,28 @@ endfunction
 
 " Load new buffer with jdt:// contents and jump to line and column.
 function! ale#uri#jdt#OpenJDTLink(encoded_uri, line, column, options, conn_id) abort
-    let l:found_eclipselsp = v:false
+    let l:linter_found = ''
 
     " We should only arrive here from a 'go to definition' request, so we'll
     " assume the eclipselsp linter is enabled.
     for l:linter in ale#linter#Get('java')
         if l:linter.name is# 'eclipselsp'
-            let l:found_eclipselsp = v:true
+            let l:linter_found = 'eclipselsp'
+        endif
+        if l:linter.name is# 'jdtls'
+            let l:linter_found = 'jdtls'
         endif
     endfor
 
-    if !l:found_eclipselsp
-        throw 'eclipselsp not running'
+    if l:linter_found == ''
+        throw 'eclipselsp or jdtls not running'
     endif
 
     let l:root = a:conn_id[stridx(a:conn_id, ':')+1:]
     let l:uri = a:encoded_uri
     call ale#lsp_linter#SendRequest(
     \   bufnr(''),
-    \   'eclipselsp',
+    \   l:linter_found,
     \   [0, 'java/classFileContents', {'uri': ale#util#ToURI(l:uri)}],
     \   function('s:OpenJDTLink', [l:root, l:uri, a:line, a:column, a:options])
     \)
@@ -89,14 +92,21 @@ function! ale#uri#jdt#ReadJDTLink(encoded_uri) abort
 
     let l:linter_map = ale#lsp_linter#GetLSPLinterMap()
 
+    let l:linter_found = ''
+
     for [l:conn_id, l:linter] in items(l:linter_map)
         if l:linter.name is# 'eclipselsp'
+            let l:linter_found = 'eclipselsp'
+            let l:root = l:conn_id[stridx(l:conn_id, ':')+1:]
+        endif
+        if l:linter.name is# 'jdtls'
+            let l:linter_found = 'jdtls'
             let l:root = l:conn_id[stridx(l:conn_id, ':')+1:]
         endif
     endfor
 
     if l:root is# v:null
-        throw 'eclipselsp not running'
+        throw 'eclipselsp or jdtls not running'
     endif
 
     let l:uri = a:encoded_uri
@@ -105,7 +115,7 @@ function! ale#uri#jdt#ReadJDTLink(encoded_uri) abort
 
     call ale#lsp_linter#SendRequest(
     \   bufnr(''),
-    \   'eclipselsp',
+    \   l:linter_found,
     \   [0, 'java/classFileContents', {'uri': ale#util#ToURI(l:uri)}],
     \   function('s:ReadClassFileContents', [l:uri])
     \)
